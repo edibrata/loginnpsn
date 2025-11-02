@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Rapor Kokurikuler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Pustaka untuk menangani file Excel (XLSX) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Pustaka untuk menangani file PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .tab-button { transition: all 0.2s ease-in-out; }
+        .tab-button:not(.tab-active):hover:not(:disabled) { background-color: #f0f9ff; color: #0284c7; }
+        .tab-button:disabled { cursor: not-allowed; pointer-events: none; }
+        .tab-active { border-color: #0284c7; background-color: #0284c7; color: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .tab-content { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .kegiatan-body {
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
+            overflow: hidden; max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0;
+        }
+        .kegiatan-body.open {
+            max-height: 5000px; /* Increased max-height */ opacity: 1; padding-top: 1rem; padding-bottom: 1rem;
+        }
+        .toggle-icon { transition: transform 0.3s ease-in-out; }
+        .tooltip-container { position: relative; display: inline-flex; align-items: center; }
+        .tooltip { 
+            visibility: hidden; opacity: 0; transition: opacity 0.3s;
+            position: absolute; top: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1e293b; color: white; text-align: center;
+            padding: 8px 12px; border-radius: 6px; z-index: 100;
+            width: max-content;
+            max-width: 300px;
+            font-size: 0.8rem; font-weight: 500;
+            white-space: normal;
+        }
+        .tooltip-left { left: 0; transform: translateX(0); }
+        .tooltip-left::after { left: 20px; }
+        .tooltip::after {
+            content: ""; position: absolute; bottom: 100%;
+            left: 50%;
+            margin-left: -5px; border-width: 5px; border-style: solid;
+            border-color: transparent transparent #1e293b transparent;
+        }
+        .tooltip-container:hover .tooltip, .tooltip-container:focus-within .tooltip { visibility: visible; opacity: 1; }
+        .tooltip:empty { display: none; }
+        .kriteria-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .kriteria-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            line-height: 1.25;
+            resize: vertical;
+        }
+        .kriteria-input::placeholder {
+            color: #94a3b8;
+        }
+        /* Style for sticky assessment table headers */
+        .asesmen-table-sticky thead th {
+            position: sticky;
+            background-color: #f8fafc; /* slate-50 color for consistency */
+            text-align: center;
+            vertical-align: middle;
+        }
+        .asesmen-table-sticky thead tr:nth-of-type(1) th { top: 0; z-index: 3; }
+        .asesmen-table-sticky thead tr:nth-of-type(2) th { top: 45px; z-index: 2; } /* Adjusted for the first header row */
+        .asesmen-table-sticky thead th[rowspan="2"] { z-index: 4; } /* Ensures 'Nama Murid' is always on top (changed from 3 to 2) */
+        
+        .asesmen-table-sticky .tooltip-container:hover, .asesmen-table-sticky .tooltip-container:focus-within {
+            z-index: 20;
+        }
+        
+        /* Style for action buttons in Murid table */
+        .murid-table-btn {
+            background: none; border: none; cursor: pointer;
+            padding: 0.25rem 0.5rem; border-radius: 0.25rem;
+            transition: background-color 0.2s;
+        }
+        .murid-table-btn:hover { background-color: #e2e8f0; }
+        .murid-table-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+        .murid-table-btn:disabled:hover { background-color: transparent; }
+        
+        /* Styles for Identitas Accordion */
+        .identitas-section-header {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .identitas-section-header:hover {
+            background-color: #f1f5f9;
+        }
+        .identitas-section-body {
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out, margin 0.5s ease-in-out;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 0;
+        }
+        .identitas-section-body.open {
+            max-height: 1500px;
+            opacity: 1;
+            padding-top: 1.25rem;
+            padding-bottom: 1.25rem;
+            margin-top: -1px;
+        }
+        .identitas-toggle-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            #tab-nav {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            #tab-nav .tab-wrapper:nth-child(4), #tab-nav .tab-wrapper:nth-child(5) {
+                grid-column: span 1 / span 1;
+            }
+             #tab-nav .tab-wrapper:nth-child(4) {
+                grid-column-start: 1;
+            }
+            #tab-nav .tab-wrapper:nth-child(5) {
+                grid-column-start: 2;
+                grid-column-end: 4;
+            }
+            .kriteria-grid {
+                 grid-template-columns: repeat(1, 1fr);
+            }
+            .perancangan-toolbar, .asesmen-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .perancangan-toolbar > div, .asesmen-toolbar > div {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+         @media (max-width: 480px) {
+            #tab-nav {
+                grid-template-columns: repeat(2, 1fr);
+            }
+             #tab-nav .tab-wrapper:nth-child(n) {
+                grid-column: auto;
+            }
+            .text-3xl {
+                font-size: 1.5rem; /* 24px */
+            }
+         }
+    </style>
+</head>
+<body class="text-slate-800 p-4 sm:p-6 md:p-8">
+
+    <!-- ===== LOGIN MODAL ===== -->
+    <div id="login-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div id="login-box" class="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 m-4">
+            <h2 class="text-2xl font-bold text-center text-sky-800 mb-2">Login Generator</h2>
+            <p class="text-center text-slate-500 mb-6">Silakan masukkan NPSN sekolah Anda untuk memulai.</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label for="npsn-input" class="block text-sm font-medium text-slate-700 mb-1">NPSN</label>
+                    <input type="text" id="npsn-input" placeholder="Masukkan 8 digit NPSN" class="w-full border border-slate-300 rounded-md px-4 py-2 text-lg focus:outline-none focus:ring-2 focus:ring-sky-500" maxlength="8">
+                </div>
+                
+                <button id="login-btn" class="w-full flex items-center justify-center px-4 py-3 bg-sky-600 text-white text-base font-semibold rounded-md shadow-sm hover:bg-sky-700 transition-colors">
+                    <span id="login-btn-text">Login</span>
+                    <i id="login-spinner" class="fas fa-spinner fa-spin hidden ml-2"></i>
+                </button>
+                
+                <div id="login-error" class="hidden text-sm text-red-600 text-center p-3 bg-red-50 rounded-md border border-red-200">
+                    <!-- Pesan error akan diisi oleh JavaScript -->
+                </div>
+            </div>
+            
+            <p class="text-xs text-slate-400 text-center mt-6">Copyright © 2025 Edi Brata</p>
+        </div>
+    </div>
+    <!-- ===== END LOGIN MODAL ===== -->
+
+
+    <!-- ===== MAIN APP CONTAINER (Hidden by default) ===== -->
+    <div id="app-container" class="hidden">
+        <main class="bg-white rounded-xl shadow-lg border border-slate-200">
+            <header class="text-center relative bg-gradient-to-b from-white to-slate-50 pb-8 pt-6 border-b rounded-t-xl">
+                <h1 class="text-3xl md:text-4xl font-bold text-sky-800 tracking-tight">Generator Kegiatan Kokurikuler</h1>
+                <p class="mt-2 text-sm text-slate-500 max-w-2xl mx-auto">Aplikasi Generator Deskripsi Kegiatan Kokurikuler<br>Copyright © 2025 Edi Brata • Professional Edition • Versi 1.0 built 20250901</p>
+                <div class="absolute top-4 right-4 flex gap-2">
+                    <div class="tooltip-container">
+                        <button id="backup-btn" aria-label="Backup Data" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Backup</span>
+                    </div>
+                    <div class="tooltip-container">
+                        <button id="restore-btn" aria-label="Restore Data" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
+                            <i class="fas fa-upload"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Restore</span>
+                    </div>
+                    <input type="file" id="restore-file-input" class="hidden" accept=".json">
+                    <div class="tooltip-container">
+                        <button id="panduan-btn" aria-label="Buka Petunjuk" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
+                            <i class="fas fa-question"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Petunjuk</span>
+                    </div>
+                     <div class="tooltip-container">
+                        <button id="profil-btn" aria-label="Buka Profil Pengembang" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
+                            <i class="fas fa-user"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Pengembang</span>
+                    </div>
+                    <!-- Tombol Logout Baru -->
+                    <div class="tooltip-container">
+                        <button id="logout-btn" aria-label="Logout" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-red-100 rounded-full text-red-500 transition-colors">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Logout</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Tab Navigation -->
+            <div id="tab-nav" role="tablist" aria-label="Navigasi Utama" class="grid grid-cols-2 md:grid-cols-5 border-b border-slate-200 p-2 bg-slate-50">
+                <div class="tab-wrapper flex-1"><button id="tab-identitas" role="tab" aria-controls="identitas-content" aria-selected="true" data-tab="identitas" class="tab-button w-full flex-1 py-3 px-4 text-center text-sm md:text-base font-semibold rounded-lg"><i class="fas fa-id-card mr-2"></i>1. Identitas</button></div>
+                <div class="tooltip-container tab-wrapper flex-1">
+                    <button id="tab-murid" role="tab" aria-controls="murid-content" aria-selected="false" tabindex="-1" data-tab="murid" class="tab-button w-full flex-1 py-3 px-4 text-center text-sm md:text-base font-semibold rounded-lg text-slate-500"><i class="fas fa-users mr-2"></i>2. Data Murid</button>
+                    <span class="tooltip" role="tooltip"></span>
+                </div>
+                <div class="tooltip-container tab-wrapper flex-1">
+                    <button id="tab-perancangan" role="tab" aria-controls="perancangan-content" aria-selected="false" tabindex="-1" data-tab="perancangan" class="tab-button w-full flex-1 py-3 px-4 text-center text-sm md:text-base font-semibold rounded-lg text-slate-500"><i class="fas fa-file-signature mr-2"></i>3. Perencanaan</button>
+                    <span class="tooltip" role="tooltip"></span>
+                </div>
+                <div class="tooltip-container tab-wrapper flex-1">
+                    <button id="tab-asesmen" role="tab" aria-controls="asesmen-content" aria-selected="false" tabindex="-1" data-tab="asesmen" class="tab-button w-full flex-1 py-3 px-4 text-center text-sm md:text-base font-semibold rounded-lg text-slate-500"><i class="fas fa-clipboard-check mr-2"></i>4. Asesmen</button>
+                    <span class="tooltip" role="tooltip"></span>
+                </div>
+                <div class="tooltip-container tab-wrapper flex-1">
+                    <button id="tab-hasil" role="tab" aria-controls="hasil-content" aria-selected="false" tabindex="-1" data-tab="hasil" class="tab-button w-full flex-1 py-3 px-4 text-center text-sm md:text-base font-semibold rounded-lg text-slate-500"><i class="fas fa-award mr-2"></i>5. Hasil Sintesis</button>
+                    <span class="tooltip" role="tooltip"></span>
+                </div>
+            </div>
+
+            <div class="p-6 md:p-8">
+                <!-- Tab content for 1, 2, 3, 4, 5 will be generated by JS -->
+                <div id="identitas-content" role="tabpanel" aria-labelledby="tab-identitas" class="tab-content hidden"></div>
+                <div id="murid-content" role="tabpanel" aria-labelledby="tab-murid" class="tab-content hidden"></div>
+                <div id="perancangan-content" role="tabpanel" aria-labelledby="tab-perancangan" class="tab-content hidden">
+                     <section id="perancangan">
+                        <!-- Main Action Toolbar -->
+                        <div class="perancangan-toolbar flex flex-wrap gap-2 justify-between items-center mb-6 border-b border-slate-200 pb-6">
+                            <div class="flex flex-wrap gap-2">
+                                <div class="tooltip-container">
+                                   <button id="save-template-btn" class="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700"><i class="fas fa-file-excel mr-2"></i>Template</button>
+                                   <span class="tooltip tooltip-left" role="tooltip">Unduh templat Excel kosong untuk merencanakan kegiatan</span>
+                               </div>
+                               <div class="tooltip-container">
+                                   <button id="export-data-btn" class="inline-flex items-center justify-center px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-teal-700"><i class="fas fa-file-export mr-2"></i>Ekspor</button>
+                                   <span class="tooltip tooltip-left" role="tooltip">Ekspor semua data perencanaan kegiatan ke file Excel</span>
+                               </div>
+                               <div class="tooltip-container">
+                                   <button id="import-data-btn" class="inline-flex items-center justify-center px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-slate-700"><i class="fas fa-file-import mr-2"></i>Impor</button>
+                                   <span class="tooltip tooltip-left" role="tooltip">Impor data perencanaan dari file templat Excel</span>
+                               </div>
+                               <input type="file" id="import-file-input" class="hidden" accept=".xlsx, .xls">
+                               <div class="tooltip-container">
+                                    <button id="clear-state-btn" class="inline-flex items-center justify-center px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-md shadow-sm hover:bg-amber-600"><i class="fas fa-undo mr-2"></i>Reset</button>
+                                    <span class="tooltip tooltip-left" role="tooltip">Hapus semua data Perencanaan dan Asesmen. Data Identitas dan Daftar Murid tidak akan terhapus.</span>
+                               </div>
+                                <div class="tooltip-container">
+                                    <button id="undo-perancangan-btn" type="button" class="murid-table-btn text-slate-600" aria-label="Undo"><i class="fas fa-undo-alt"></i></button>
+                                    <span class="tooltip" role="tooltip">Batalkan (Undo)</span>
+                                </div>
+                                <div class="tooltip-container">
+                                    <button id="redo-perancangan-btn" type="button" class="murid-table-btn text-slate-600" aria-label="Redo"><i class="fas fa-redo-alt"></i></button>
+                                    <span class="tooltip" role="tooltip">Ulangi (Redo)</span>
+                                </div>
+                            </div>
+                            <div class="tooltip-container">
+                                <button id="tambah-kegiatan" class="inline-flex items-center px-4 py-2 bg-sky-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-sky-700"><i class="fas fa-plus mr-2"></i>Tambah</button>
+                                <span class="tooltip" role="tooltip">Tambah kartu perencanaan kegiatan baru</span>
+                            </div>
+                        </div>
+                        
+                        <div id="kegiatan-container" class="space-y-3"></div>
+                    </section>
+                </div>
+                <div id="asesmen-content" role="tabpanel" aria-labelledby="tab-asesmen" class="tab-content hidden"></div>
+                <div id="hasil-content" role="tabpanel" aria-labelledby="tab-hasil" class="tab-content hidden"></div>
+            </div>
+        </main>
+    </div>
+    <!-- ===== END MAIN APP CONTAINER ===== -->
+
+
+    <!-- Help Modal -->
+    <div id="panduan-modal" role="dialog" aria-modal="true" aria-labelledby="panduan-title" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center p-5 border-b sticky top-0 bg-white">
+                <h3 id="panduan-title" class="text-xl font-bold text-slate-800"><i class="fas fa-book-open mr-2 text-sky-600"></i>Petunjuk</h3>
+                <button id="close-panduan-btn" aria-label="Tutup Petunjuk" class="text-slate-400 hover:text-slate-800 text-3xl font-bold">&times;</button>
+            </div>
+            <div class="p-6 text-slate-700 space-y-4">
+                <!-- ... Konten Panduan ... (Tidak diubah) -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Profil Modal -->
+    <div id="profil-modal" role="dialog" aria-modal="true" aria-labelledby="profil-title" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+             <!-- ... Konten Profil ... (Tidak diubah) -->
+        </div>
+    </div>
+
+
+    <!-- Confirmation Modal -->
+    <div id="konfirmasi-modal" role="alertdialog" aria-modal="true" aria-labelledby="konfirmasi-title" aria-describedby="konfirmasi-message" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <!-- ... Konten Konfirmasi ... (Tidak diubah) -->
+    </div>
+
+    <!-- Notification Modal -->
+    <div id="notifikasi-modal" role="alertdialog" aria-modal="true" aria-labelledby="notifikasi-message" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <!-- ... Konten Notifikasi ... (Tidak diubah) -->
+    </div>
+    
+    <!-- Report Export Modal -->
+    <div id="ekspor-laporan-modal" role="dialog" aria-modal="true" aria-labelledby="ekspor-laporan-title" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <!-- ... Konten Ekspor Laporan ... (Tidak diubah) -->
+    </div>
+
+
+    <!-- HTML Templates -->
+    <template id="kegiatan-template">
+        <!-- ... Template Kegiatan ... (Tidak diubah) -->
+    </template>
+
+    <template id="dimensi-template">
+        <!-- ... Template Dimensi ... (Tidak diubah) -->
+    </template>
+    
+    <template id="subdimensi-item-template">
+        <!-- ... Template Subdimensi ... (Tidak diubah) -->
+    </template>
+
+ <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // --- KONFIGURASI LOGIN ---
+        const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ1bPAig59TvJf05CLAjAA9h0cRn1IwqzNkI1p7if2tP-sP7rd0uQrIY-_mXSvv3bqC-ZVXAPEeH9e9/pub?gid=883456521&single=true&output=csv';
+        const WHATSAPP_ERROR_URL = 'https://wa.me/6287773949015?text=Pa%20Edi%2C%20Saya%3A%0A-%20Nama%3A%0A-%20Sekolah%3A%0A-%20Kecamatan%3A%0A-%20Kabupaten%2FKota%3A%0A-%20Provinsi%3A%0A%0ANPSN%20sekolah%20saya%20tidak%20terdaftar%20sehingga%20tidak%20dapat%20login%20pada%20generator%20kokurikuler%20yang%20Bapak%20kembangkan.%0A%0AMohon%20bantuannya%2C%20terima%20kasih.';
+        let schoolDatabase = null; // Cache untuk data CSV
+
+        // --- DATA & STATE ---
+        let identitasData = {};
+        // ... (Sisa variabel state tidak diubah) ...
+        let kegiatanData = {};
+        let muridData = {};
+        let daftarMurid = []; 
+        let muridHistory = [[]];
+        let muridHistoryIndex = 0;
+        let identitasHistory = [{}];
+        let identitasHistoryIndex = 0;
+        let perancanganHistory = [{}];
+        let perancanganHistoryIndex = 0;
+        let activeTab = 'identitas';
+        let currentAsesmenViewId = null;
+        let isIdentitasComplete = false;
+        
+        // ... (Data Dimensi & Subdimensi tidak diubah) ...
+        const subdimensiDetail = { /* ... data lengkap ... */ };
+        const dimensiProfil = ["Keimanan & Ketakwaan", "Kewargaan", "Penalaran Kritis", "Kreativitas", "Kolaborasi", "Kemandirian", "Kesehatan", "Komunikasi"];
+        const capaianOptions = { "M": "Mahir", "C": "Cakap", "B": "Berkembang" };
+        const capaianToNumber = { "M": 3, "C": 2, "B": 1 };
+        const numberToCapaian = { 3: 'M', 2: 'C', 1: 'B' };
+
+        let activeModal = null;
+        let lastFocusedElement = null;
+
+        // --- DOM ELEMENTS ---
+        const DOMElements = {
+            // ... (DOM Elements tidak diubah) ...
+            tabNav: document.getElementById('tab-nav'),
+            tabContents: { /* ... */ },
+            kegiatanContainer: document.getElementById('kegiatan-container'),
+            btnTambahKegiatan: document.getElementById('tambah-kegiatan'),
+            btnSaveTemplate: document.getElementById('save-template-btn'),
+            btnExportData: document.getElementById('export-data-btn'),
+            btnImportData: document.getElementById('import-data-btn'),
+            importFileInput: document.getElementById('import-file-input'),
+            templates: { /* ... */ },
+            panduanBtn: document.getElementById('panduan-btn'),
+            panduanModal: document.getElementById('panduan-modal'),
+            closePanduanBtn: document.getElementById('close-panduan-btn'),
+            profilBtn: document.getElementById('profil-btn'),
+            profilModal: document.getElementById('profil-modal'),
+            closeProfilBtn: document.getElementById('close-profil-btn'),
+            btnClearState: document.getElementById('clear-state-btn'),
+            konfirmasiModal: document.getElementById('konfirmasi-modal'),
+            konfirmasiMessage: document.getElementById('konfirmasi-message'),
+            konfirmasiConfirmBtn: document.getElementById('konfirmasi-confirm-btn'),
+            konfirmasiCancelBtn: document.getElementById('konfirmasi-cancel-btn'),
+            notifikasiModal: document.getElementById('notifikasi-modal'),
+            notifikasiMessage: document.getElementById('notifikasi-message'),
+            notifikasiOkBtn: document.getElementById('notifikasi-ok-btn'),
+            eksporLaporanModal: document.getElementById('ekspor-laporan-modal'),
+            closeEksporLaporanBtn: document.getElementById('close-ekspor-laporan-btn'),
+            exportToExcelBtn: document.getElementById('export-to-excel-btn'),
+            exportToPdfBtn: document.getElementById('export-to-pdf-btn'),
+            btnBackup: document.getElementById('backup-btn'),
+            btnRestore: document.getElementById('restore-btn'),
+            restoreFileInput: document.getElementById('restore-file-input'),
+            // DOM Elements Baru
+            loginModal: document.getElementById('login-modal'),
+            loginBtn: document.getElementById('login-btn'),
+            loginBtnText: document.getElementById('login-btn-text'),
+            loginSpinner: document.getElementById('login-spinner'),
+            loginError: document.getElementById('login-error'),
+            npsnInput: document.getElementById('npsn-input'),
+            appContainer: document.getElementById('app-container'),
+            logoutBtn: document.getElementById('logout-btn')
+        };
+
+
+        // --- FUNGSI LOGIN BARU ---
+
+        /**
+         * Mengunduh dan mem-parsing data CSV dari Google Sheet publik.
+         * Membuat Map() untuk pencarian NPSN yang cepat.
+         */
+        async function fetchCsvData() {
+            try {
+                const response = await fetch(SPREADSHEET_URL);
+                if (!response.ok) throw new Error('Gagal mengambil data Spreadsheet.');
+                const text = await response.text();
+                
+                const rows = text.split('\n').map(row => row.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')));
+                
+                if (rows.length < 2) throw new Error('Spreadsheet kosong atau format tidak valid.');
+                
+                const headers = rows[0].map(h => h.trim().toLowerCase());
+                
+                // Mencari indeks kolom (case-insensitive)
+                const npsnIndex = headers.indexOf('npsn');
+                const namaSekolahIndex = headers.indexOf('nama sekolah');
+                const alamatIndex = headers.indexOf('alamat');
+                const desaIndex = headers.indexOf('desa/kelurahan');
+                const kecamatanIndex = headers.indexOf('kecamatan');
+                const kabIndex = headers.indexOf('kabupaten/kota');
+                const provIndex = headers.indexOf('provinsi');
+
+                if (npsnIndex === -1 || namaSekolahIndex === -1 || kecamatanIndex === -1) {
+                    console.error('Header kolom penting (NPSN, Nama Sekolah, Kecamatan) tidak ditemukan di CSV.');
+                    throw new Error('Format Spreadsheet tidak sesuai. Header kolom penting tidak ditemukan.');
+                }
+
+                const npsnMap = new Map();
+                rows.slice(1).forEach(row => {
+                    const npsn = row[npsnIndex];
+                    if (npsn && npsn.length === 8) { // Validasi NPSN
+                        npsnMap.set(npsn, {
+                            // Ini adalah nama field di form (kunci) dan data dari CSV (nilai)
+                            npsn: npsn,
+                            namaSekolah: row[namaSekolahIndex],
+                            alamat: row[alamatIndex] || '',
+                            namaDesaKelurahan: row[desaIndex] || '',
+                            kecamatan: row[kecamatanIndex],
+                            namaKabupatenKota: row[kabIndex] || '',
+                            provinsi: row[provIndex] || ''
+                        });
+                    }
+                });
+                return npsnMap;
+            } catch (error) {
+                console.error('Error fetching CSV data:', error);
+                DOMElements.loginBtnText.textContent = 'Login';
+                DOMElements.loginSpinner.classList.add('hidden');
+                DOMElements.loginBtn.disabled = false;
+                DOMElements.loginError.innerHTML = `Gagal terhubung ke database. Periksa koneksi internet Anda. <br><small>(${error.message})</small>`;
+                DOMElements.loginError.classList.remove('hidden');
+                throw error;
+            }
+        }
+
+        /**
+         * Menerapkan data sekolah yang sudah login ke form Identitas dan menguncinya.
+         */
+        function applyLoginData(schoolData) {
+            if (!schoolData) return;
+
+            // Daftar field (id input) dan data yang sesuai dari object schoolData
+            const fieldMap = {
+                'namaSekolah': schoolData.namaSekolah,
+                'npsn': schoolData.npsn,
+                'alamat': schoolData.alamat,
+                'namaDesaKelurahan': schoolData.namaDesaKelurahan,
+                'kecamatan': schoolData.kecamatan,
+                'namaKabupatenKota': schoolData.namaKabupatenKota,
+                'provinsi': schoolData.provinsi
+            };
+
+            for (const [id, value] of Object.entries(fieldMap)) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = value || '';
+                    el.readOnly = true;
+                    el.classList.add('bg-slate-100', 'cursor-not-allowed', 'border-slate-300', 'focus:ring-0', 'focus:outline-none');
+                    el.tabIndex = -1; // Hapus dari navigasi keyboard
+                }
+            }
+            
+            // Juga kunci dropdown (jika ada data)
+            if (schoolData.namaDesaKelurahan) {
+                const elSelect = document.getElementById('desaKelurahan');
+                if (elSelect) elSelect.disabled = true;
+            }
+            if (schoolData.namaKabupatenKota) {
+                const elSelect = document.getElementById('kabupatenKota');
+                if (elSelect) elSelect.disabled = true;
+            }
+        }
+
+        /**
+         * Menangani klik tombol Login.
+         */
+        async function handleLogin() {
+            const npsn = DOMElements.npsnInput.value.trim();
+            if (npsn.length !== 8) {
+                DOMElements.loginError.textContent = 'NPSN harus 8 digit.';
+                DOMElements.loginError.classList.remove('hidden');
+                return;
+            }
+
+            DOMElements.loginBtn.disabled = true;
+            DOMElements.loginBtnText.textContent = 'Memvalidasi...';
+            DOMElements.loginSpinner.classList.remove('hidden');
+            DOMElements.loginError.classList.add('hidden');
+
+            // 1. Ambil database jika belum ada
+            if (!schoolDatabase) {
+                try {
+                    schoolDatabase = await fetchCsvData();
+                } catch (error) {
+                    // fetchCsvData sudah menangani UI error
+                    return; 
+                }
+            }
+
+            // 2. Cari NPSN
+            const schoolData = schoolDatabase.get(npsn);
+
+            // 3. Handle Hasil
+            if (schoolData) {
+                // Berhasil Login
+                sessionStorage.setItem('schoolData', JSON.stringify(schoolData));
+                identitasData = { ...identitasData, ...schoolData }; // Pra-isi state
+                
+                DOMElements.loginModal.classList.add('hidden');
+                DOMElements.appContainer.classList.remove('hidden');
+                
+                initAppLogic(); // Jalankan sisa aplikasi
+            } else {
+                // Gagal Login
+                DOMElements.loginError.innerHTML = `NPSN tidak ditemukan. Silakan hubungi admin di <a href="${WHATSAPP_ERROR_URL}" target="_blank" class="font-bold underline text-red-700 hover:text-red-800">WhatsApp ini</a>.`;
+                DOMElements.loginError.classList.remove('hidden');
+                DOMElements.loginBtn.disabled = false;
+                DOMElements.loginBtnText.textContent = 'Login';
+                DOMElements.loginSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Menangani Logout.
+         */
+        function handleLogout() {
+            showConfirmation('Apakah Anda yakin ingin logout? Data yang belum disimpan mungkin hilang.', () => {
+                sessionStorage.clear();
+                location.reload();
+            });
+        }
+
+        // --- FUNCTIONS DEFINITION ---
+
+        // ... (Fungsi callGeminiAPI, getFormattedTimestamp tidak diubah) ...
+        const callGeminiAPI = async (prompt, maxRetries = 3) => { /* ... data lengkap ... */ };
+        const getFormattedTimestamp = (full = false) => { /* ... data lengkap ... */ };
+
+        const saveState = () => {
+            try {
+                simpanIdentitas(); // Pastikan identitasData terbaru (termasuk yang dikunci)
+                simpanPerancangan();
+                simpanAsesmen(currentAsesmenViewId);
+                const state = { identitasData, kegiatanData, muridData, daftarMurid, isIdentitasComplete };
+                localStorage.setItem('raporKokurikulerState', JSON.stringify(state));
+            } catch (e) {
+                console.error("Gagal menyimpan state ke localStorage:", e);
+            }
+        };
+
+        const loadState = () => {
+            try {
+                const savedState = localStorage.getItem('raporKokurikulerState');
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    
+                    // AMBIL DATA DARI LOCALSTORAGE, TAPI TIMPA DENGAN DATA LOGIN DARI SESSIONSTORAGE
+                    const loggedInData = JSON.parse(sessionStorage.getItem('schoolData') || '{}');
+                    
+                    identitasData = { ...(state.identitasData || {}), ...loggedInData }; // Data login (session) lebih prioritas
+                    
+                    kegiatanData = state.kegiatanData || {};
+                    muridData = state.muridData || {};
+                    daftarMurid = state.daftarMurid || [];
+                    isIdentitasComplete = state.isIdentitasComplete || false;
+                    
+                    // ... (sisa fungsi loadState tidak diubah) ...
+                    muridHistory = [[...daftarMurid]];
+                    muridHistoryIndex = 0;
+                    identitasHistory = [JSON.parse(JSON.stringify(identitasData))];
+                    identitasHistoryIndex = 0;
+                    perancanganHistory = [JSON.parse(JSON.stringify(kegiatanData || {}))];
+                    perancanganHistoryIndex = 0;
+                    return true;
+                }
+            } catch (e) {
+                console.error("Gagal memuat state dari localStorage:", e);
+                localStorage.removeItem('raporKokurikulerState');
+            }
+            return false;
+        };
+        
+        // ... (Fungsi openModal, closeModal, showNotification, showConfirmation tidak diubah) ...
+        const openModal = (modalElement) => { /* ... data lengkap ... */ };
+        const closeModal = () => { /* ... data lengkap ... */ };
+        const showNotification = (message) => { /* ... data lengkap ... */ };
+        const showConfirmation = (message, onConfirm) => { /* ... data lengkap ... */ };
+
+        const updateTabLockState = () => {
+            const tabsToLock = DOMElements.tabNav.querySelectorAll('[data-tab]:not([data-tab="identitas"])');
+            
+            // Cek data login DULU
+            const loggedInData = JSON.parse(sessionStorage.getItem('schoolData') || '{}');
+            // Cek data dari form (selain yang dikunci)
+            const isComplete = isIdentitasComplete || (loggedInData.npsn && validateIdentitasForm(true).isValid);
+
+            if (isComplete) {
+                tabsToLock.forEach(tab => {
+                    const wrapper = tab.parentElement;
+                    tab.disabled = false;
+                    tab.classList.remove('opacity-50');
+                    tab.setAttribute('tabindex', '0');
+                    const tooltip = wrapper.querySelector('.tooltip');
+                    if (tooltip) tooltip.innerHTML = '';
+                });
+            } else {
+                tabsToLock.forEach(tab => {
+                    const wrapper = tab.parentElement;
+                    tab.disabled = true;
+                    tab.classList.add('opacity-50');
+                    tab.setAttribute('tabindex', '-1');
+                    const tooltip = wrapper.querySelector('.tooltip');
+                    if (tooltip) tooltip.innerHTML = 'Tab ini terkunci, akan aktif setelah tab identitas terisi dan tersimpan.';
+                });
+            }
+        };
+
+        // ... (Fungsi clearState, showTab tidak diubah) ...
+        const clearState = () => { /* ... data lengkap ... */ };
+        const showTab = (tabId) => { /* ... data lengkap ... */ };
+        
+        // ... (Semua fungsi Perancangan: renderSubdimensiCheckboxes, tambahDimensi, tambahKegiatan, renderFromState, handleSaveTemplate, handleExportData, processImportedFile, simpanPerancangan tidak diubah) ...
+        const renderSubdimensiCheckboxes = (dimensiBlock, dimensionName, initialData = []) => { /* ... data lengkap ... */ };
+        const tambahDimensi = (button, data = null, container = null) => { /* ... data lengkap ... */ };
+        const tambahKegiatan = (openByDefault = false, data = null) => { /* ... data lengkap ... */ };
+        const renderFromState = () => { /* ... data lengkap ... */ };
+        const handleSaveTemplate = () => { /* ... data lengkap ... */ };
+        const handleExportData = () => { /* ... data lengkap ... */ };
+        const processImportedFile = (event) => { /* ... data lengkap ... */ };
+        const simpanPerancangan = () => { /* ... data lengkap ... */ };
+
+        // ... (Semua fungsi Asesmen: handleExportAsesmen, handleImportAsesmen, simpanAsesmen, tambahBarisMuridAsesmen, sanitizeSheetName, handleDownloadAsesmenTemplate, renderAsesmenTable, resetAsesmenTab tidak diubah) ...
+        const handleExportAsesmen = () => { /* ... data lengkap ... */ };
+        const handleImportAsesmen = (event) => { /* ... data lengkap ... */ };
+        const simpanAsesmen = (kegiatanIdToSave) => { /* ... data lengkap ... */ };
+        const tambahBarisMuridAsesmen = (tbody, nama) => { /* ... data lengkap ... */ };
+        const sanitizeSheetName = (name) => { /* ... data lengkap ... */ };
+        const handleDownloadAsesmenTemplate = (type, action = 'template') => { /* ... data lengkap ... */ };
+        const renderAsesmenTable = () => { /* ... data lengkap ... */ };
+        const resetAsesmenTab = () => { /* ... data lengkap ... */ };
+
+        // ... (Semua fungsi Murid: updateUndoRedoButtons, saveMuridStateToHistory, renderMuridTable, renderMuridPage tidak diubah) ...
+        const updateUndoRedoButtons = () => { /* ... data lengkap ... */ };
+        const saveMuridStateToHistory = (newState) => { /* ... data lengkap ... */ };
+        const renderMuridTable = () => { /* ... data lengkap ... */ };
+        const renderMuridPage = () => { /* ... data lengkap ... */ };
+
+        // ... (Fungsi History Identitas & Perancangan: updateUndoRedoButtonsIdentitas, saveIdentitasStateToHistory, updateUndoRedoButtonsPerancangan, captureAndSavePerancanganState tidak diubah) ...
+        const updateUndoRedoButtonsIdentitas = () => { /* ... data lengkap ... */ };
+        const saveIdentitasStateToHistory = (newData) => { /* ... data lengkap ... */ };
+        const updateUndoRedoButtonsPerancangan = () => { /* ... data lengkap ... */ };
+        const captureAndSavePerancanganState = () => { /* ... data lengkap ... */ };
+
+        // ... (Fungsi renderAsesmenPage, renderApiKeyInput tidak diubah) ...
+        const renderAsesmenPage = () => { /* ... data lengkap ... */ };
+        const renderApiKeyInput = (page) => { /* ... data lengkap ... */ };
+
+        // ... (Fungsi Hasil/Sintesis: prepareAIPromptData, generateAINarrative, renderHasilPage, getExportData, handleExportExcel, handleExportPdf tidak diubah) ...
+        const prepareAIPromptData = (nama) => { /* ... data lengkap ... */ };
+        const generateAINarrative = async (row) => { /* ... data lengkap ... */ };
+        const renderHasilPage = () => { /* ... data lengkap ... */ };
+        const getExportData = () => { /* ... data lengkap ... */ };
+        const handleExportExcel = () => { /* ... data lengkap ... */ };
+        const handleExportPdf = () => { /* ... data lengkap ... */ };
+
+        // ... (Fungsi handlePerancanganClick tidak diubah) ...
+        const handlePerancanganClick = (e) => { /* ... data lengkap ... */ };
+        
+        // --- Fungsi Identitas (DIMODIFIKASI) ---
+        
+        // ... (Fungsi sendToGoogleSheet, handleIdentitasTemplate, handleIdentitasExport, handleIdentitasImport tidak diubah) ...
+        const sendToGoogleSheet = (data) => { /* ... data lengkap ... */ };
+        const handleIdentitasTemplate = () => { /* ... data lengkap ... */ };
+        const handleIdentitasExport = () => { /* ... data lengkap ... */ };
+        const handleIdentitasImport = (event) => { /* ... data lengkap ... */ };
+
+        /**
+         * MODIFIKASI: Menyimpan data identitas, tapi memastikan data yang terkunci (dari login) tidak tertimpa.
+         */
+        const simpanIdentitas = () => {
+            const form = document.getElementById('identitas-form');
+            if (!form) return;
+            
+            // 1. Ambil semua data dari form
+            const formData = new FormData(form);
+            const dataFromForm = Object.fromEntries(formData.entries());
+            dataFromForm.geminiApiKey = identitasData.geminiApiKey || dataFromForm.geminiApiKey || '';
+            
+            // 2. Ambil data asli yang terkunci dari session
+            const loggedInData = JSON.parse(sessionStorage.getItem('schoolData') || '{}');
+
+            // 3. Gabungkan: Ambil semua dari form, LALU timpa dengan data yang terkunci
+            // Ini untuk mencegah manipulasi 'Inspect Element'
+            identitasData = { ...dataFromForm, ...loggedInData };
+        };
+        
+        /**
+         * MODIFIKASI: Validasi form, tapi mengabaikan field yang sudah diisi oleh data login
+         */
+        const validateIdentitasForm = (ignoreLockedFields = false) => {
+            const form = document.getElementById('identitas-form');
+            if (!form) return { isValid: false, emptyFields: ['Form tidak ditemukan'], invalidFields: [] };
+
+            const loggedInData = JSON.parse(sessionStorage.getItem('schoolData') || '{}');
+            const lockedFieldIds = ignoreLockedFields ? Object.keys(loggedInData).map(key => {
+                // Konversi kunci data (spt 'namaSekolah') ke ID form (spt 'namaSekolah')
+                const fieldMap = {
+                    'namaSekolah': 'namaSekolah', 'npsn': 'npsn', 'alamat': 'alamat',
+                    'namaDesaKelurahan': 'namaDesaKelurahan', 'kecamatan': 'kecamatan',
+                    'namaKabupatenKota': 'namaKabupatenKota', 'provinsi': 'provinsi'
+                };
+                // Cari padanan ID form
+                const formId = Object.keys(fieldMap).find(id => fieldMap[id] === key);
+                return formId || key;
+            }) : [];
+
+            const emptyFields = new Set();
+            const invalidFields = new Set();
+            let isValid = true;
+            const waPattern = /^08[1-9][0-9]{7,10}$/; 
+
+            const inputs = form.querySelectorAll('input[name], select[name]');
+            inputs.forEach(input => {
+                // Abaikan validasi jika field ini dikunci
+                if (lockedFieldIds.includes(input.id)) {
+                    return;
+                }
+                
+                // Lanjutkan validasi untuk field yang tidak dikunci
+                if (!input.value || input.value.trim() === '') {
+                    isValid = false;
+                    let label = form.querySelector(`label[for="${input.id}"]`);
+                    let labelText = label ? label.textContent.trim() : (input.placeholder || input.name);
+
+                    if (input.name === 'namaDesaKelurahan' || input.name === 'desaKelurahanSelect') labelText = 'Desa/Kelurahan';
+                    else if (input.name === 'namaKabupatenKota' || input.name === 'kabupatenKotaSelect') labelText = 'Kabupaten/Kota';
+                    
+                    emptyFields.add(labelText);
+                }
+                
+                if (input.name === 'waKepsek' || input.name === 'waGuru') {
+                    const waValue = input.value.trim();
+                    if (waValue && !waPattern.test(waValue)) {
+                        isValid = false;
+                        let labelText = form.querySelector(`label[for="${input.id}"]`).textContent.trim();
+                        invalidFields.add(labelText);
+                    }
+                }
+            });
+
+            return { isValid, emptyFields: Array.from(emptyFields), invalidFields: Array.from(invalidFields) };
+        };
+
+        /**
+         * MODIFIKASI: Merender halaman identitas, lalu memanggil applyLoginData jika sudah login.
+         */
+        const renderIdentitasPage = () => {
+            const page = DOMElements.tabContents.identitas;
+            const kelasOptions = Array.from({length: 12}, (_, i) => i + 1).map(k => `<option value="${k}" ${identitasData.kelas == k ? 'selected' : ''}>${k}</option>`).join('');
+            const rombelOptionsList = ["Hanya Satu", ...Array.from({length: 15}, (_, i) => String.fromCharCode(65 + i))];
+            const rombelOptions = rombelOptionsList.map(r => `<option value="${r}" ${identitasData.rombel == r ? 'selected' : ''}>${r}</option>`).join('');
+            
+            const desaKelurahanOptions = `
+                <option value="" ${!identitasData.desaKelurahanSelect ? 'selected' : ''}>Pilih</option>
+                <option value="Desa" ${identitasData.desaKelurahanSelect === 'Desa' ? 'selected' : ''}>Desa</option>
+                <option value="Kelurahan" ${identitasData.desaKelurahanSelect === 'Kelurahan' ? 'selected' : ''}>Kelurahan</option>
+            `;
+             const kabupatenKotaOptions = `
+                <option value="" ${!identitasData.kabupatenKotaSelect ? 'selected' : ''}>Pilih</option>
+                <option value="Kabupaten" ${identitasData.kabupatenKotaSelect === 'Kabupaten' ? 'selected' : ''}>Kabupaten</option>
+                <option value="Kota" ${identitasData.kabupatenKotaSelect === 'Kota' ? 'selected' : ''}>Kota</option>
+            `;
+            
+            // ... (HTML untuk renderIdentitasPage tidak diubah) ...
+            page.innerHTML = `
+            <div class="max-w-4xl mx-auto space-y-4 text-gray-700 font-sans">
+                <!-- Buttons -->
+                <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+                    <!-- ... (Tombol-tombol tidak diubah) ... -->
+                </div>
+                
+                <form id="identitas-form" class="space-y-4">
+                    <!-- Satuan Pendidikan Accordion -->
+                    <div class="border border-gray-300 rounded-md">
+                        <div id="accordion-header-sekolah" aria-expanded="true" aria-controls="accordion-body-sekolah" class="identitas-section-header flex justify-between items-center p-4 rounded-t-md">
+                            <h2 class="flex items-center text-gray-900 font-semibold text-base">
+                                <i class="fas fa-school text-indigo-700 text-lg mr-3"></i>Satuan Pendidikan
+                            </h2>
+                            <i class="identitas-toggle-icon fas fa-chevron-down text-gray-500"></i>
+                        </div>
+                        <div id="accordion-body-sekolah" role="region" aria-labelledby="accordion-header-sekolah" class="identitas-section-body open space-y-5 px-4">
+                             <div class="flex flex-wrap md:flex-nowrap gap-4">
+                                <div class="w-full md:w-3/4">
+                                    <label class="text-xs font-semibold text-gray-700 block mb-1" for="namaSekolah">Nama Sekolah</label>
+                                    <input id="namaSekolah" name="namaSekolah" type="text" value="${identitasData.namaSekolah || ''}" placeholder="Masukkan nama sekolah lengkap" class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                </div>
+                                <div class="w-full md:w-1/4">
+                                    <label class="text-xs font-semibold text-gray-700 block mb-1" for="npsn">NPSN</label>
+                                    <input id="npsn" name="npsn" type="text" value="${identitasData.npsn || ''}" placeholder="Nomor Pokok Sekolah" class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-gray-700 block mb-1" for="alamat">Alamat</label>
+                                <input id="alamat" name="alamat" type="text" value="${identitasData.alamat || ''}" placeholder="Alamat lengkap sekolah" class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                            </div>
+                            <div class="flex flex-wrap md:flex-nowrap gap-4">
+                                <div class="w-full md:w-1/2 space-y-5">
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-700 block mb-1" for="desaKelurahan">Desa/Kelurahan</label>
+                                        <div class="flex gap-2">
+                                            <select id="desaKelurahan" name="desaKelurahanSelect" class="w-1/3 border border-gray-300 rounded-md px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-600">${desaKelurahanOptions}</select>
+                                            <input id="namaDesaKelurahan" name="namaDesaKelurahan" type="text" value="${identitasData.namaDesaKelurahan || ''}" placeholder="Nama" class="w-2/3 border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-700 block mb-1" for="kabupatenKota">Kabupaten/Kota</label>
+                                        <div class="flex gap-2">
+                                            <select id="kabupatenKota" name="kabupatenKotaSelect" class="w-1/3 border border-gray-300 rounded-md px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-600">${kabupatenKotaOptions}</select>
+                                            <input id="namaKabupatenKota" name="namaKabupatenKota" type="text" value="${identitasData.namaKabupatenKota || ''}" placeholder="Nama" class="w-2/3 border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="w-full md:w-1/2 space-y-5">
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-700 block mb-1" for="kecamatan">Kecamatan</label>
+                                        <input id="kecamatan" name="kecamatan" type="text" value="${identitasData.kecamatan || ''}" placeholder="Nama kecamatan" class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-700 block mb-1" for="provinsi">Provinsi</label>
+                                        <input id="provinsi" name="provinsi" type="text" value="${identitasData.provinsi || ''}" placeholder="Nama provinsi" class="w-full border border-gray-300 rounded-md px-3 py-2 text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ... (HTML Accordion Kelas dan Guru tidak diubah) ... -->
+                    
+                </form>
+            </div>`;
+
+            const form = page.querySelector('#identitas-form');
+            const simpanBtn = page.querySelector('#simpan-identitas-btn');
+            
+            form.addEventListener('input', () => {
+                simpanIdentitas();
+                saveIdentitasStateToHistory(identitasData);
+            });
+            form.addEventListener('change', () => {
+                simpanIdentitas();
+                saveIdentitasStateToHistory(identitasData);
+            });
+
+            const updateSimpanButtonState = () => {
+                // Validasi hanya field yang *tidak* dikunci
+                const validation = validateIdentitasForm(true); 
+                if (validation.isValid) {
+                    simpanBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    simpanBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            };
+
+            form.addEventListener('input', updateSimpanButtonState);
+            form.addEventListener('change', updateSimpanButtonState);
+            
+            updateSimpanButtonState();
+            updateUndoRedoButtonsIdentitas();
+
+            form.addEventListener('click', (e) => {
+                const header = e.target.closest('.identitas-section-header');
+                if (header) {
+                    const body = header.nextElementSibling;
+                    const icon = header.querySelector('.identitas-toggle-icon');
+                    const isExpanded = body.classList.toggle('open');
+                    header.setAttribute('aria-expanded', isExpanded);
+                    icon.classList.toggle('rotate-180', isExpanded);
+                }
+            });
+            const firstHeader = form.querySelector('.identitas-section-header');
+            if(firstHeader){
+                firstHeader.nextElementSibling.classList.add('open');
+                firstHeader.querySelector('.identitas-toggle-icon').classList.add('rotate-180');
+            }
+
+            page.querySelector('#simpan-identitas-btn').addEventListener('click', () => {
+                simpanIdentitas(); // Panggil simpanIdentitas yang sudah dimodifikasi
+                saveIdentitasStateToHistory(identitasData);
+                
+                // Validasi hanya field yang *tidak* dikunci
+                const validation = validateIdentitasForm(true); 
+                
+                if (validation.isValid) {
+                    isIdentitasComplete = true; // Set flag bahwa data (yang tidak dikunci) sudah lengkap
+                    saveState();
+                    updateTabLockState();
+                    sendToGoogleSheet(identitasData);
+                    showNotification('Data identitas berhasil disimpan. Anda kini dapat melanjutkan ke tab berikutnya.');
+                } else {
+                    let message = '';
+                    if (validation.emptyFields.length > 0) {
+                        message += `Harap lengkapi bagian berikut (selain data sekolah yang sudah terisi otomatis):\n\n• ${validation.emptyFields.join('\n• ')}`;
+                    }
+                    if (validation.invalidFields.length > 0) {
+                        if (message) message += '\n\n';
+                        message += `Format isian tidak valid:\n\n• ${validation.invalidFields.join('\n• ')}`;
+                    }
+                    showNotification(message);
+                }
+            });
+            
+            // ... (Listener tombol Undo/Redo/Reset/Import/Export Identitas tidak diubah) ...
+            page.querySelector('#undo-identitas-btn').addEventListener('click', () => { /* ... */ });
+            page.querySelector('#redo-identitas-btn').addEventListener('click', () => { /* ... */ });
+            page.querySelector('#reset-identitas-btn').addEventListener('click', () => { /* ... */ });
+            page.querySelector('#template-identitas-btn').addEventListener('click', handleIdentitasTemplate);
+            page.querySelector('#ekspor-identitas-btn').addEventListener('click', handleIdentitasExport);
+            const importIdentitasBtn = page.querySelector('#impor-identitas-btn');
+            const importIdentitasFileInput = page.querySelector('#import-identitas-file-input');
+            importIdentitasBtn.addEventListener('click', () => importIdentitasFileInput.click());
+            importIdentitasFileInput.addEventListener('change', handleIdentitasImport);
+            
+            // --- PANGGILAN KUNCI ---
+            // Setelah HTML form dirender, panggil fungsi untuk mengunci field jika sudah login
+            const savedData = sessionStorage.getItem('schoolData');
+            if (savedData) {
+                applyLoginData(JSON.parse(savedData));
+            }
+        };
+
+        const setupEventListeners = () => {
+             // ... (Listener Tab Nav, Tambah Kegiatan, Perancangan, Asesmen, dll tidak diubah) ...
+            DOMElements.tabNav.addEventListener('keydown', (e) => { /* ... */ });
+            DOMElements.tabNav.addEventListener('click', e => { /* ... */ });
+            DOMElements.btnTambahKegiatan.addEventListener('click', () => { /* ... */ });
+            DOMElements.kegiatanContainer.addEventListener('click', (e) => { /* ... */ });
+            DOMElements.kegiatanContainer.addEventListener('input', e => { /* ... */ });
+            DOMElements.kegiatanContainer.addEventListener('change', e => { /* ... */ });
+            const asesmenContent = DOMElements.tabContents.asesmen;
+            if (asesmenContent) { /* ... */ }
+            DOMElements.btnSaveTemplate.addEventListener('click', handleSaveTemplate);
+            DOMElements.btnExportData.addEventListener('click', handleExportData);
+            DOMElements.btnImportData.addEventListener('click', () => DOMElements.importFileInput.click());
+            DOMElements.importFileInput.addEventListener('change', processImportedFile);
+            
+            // ... (Listener Modal Panduan, Profil, Konfirmasi, Notifikasi, Ekspor tidak diubah) ...
+            DOMElements.panduanBtn.addEventListener('click', () => openModal(DOMElements.panduanModal));
+            DOMElements.closePanduanBtn.addEventListener('click', closeModal);
+            DOMElements.panduanModal.addEventListener('click', (e) => { /* ... */ });
+            DOMElements.profilBtn.addEventListener('click', () => openModal(DOMElements.profilModal));
+            DOMElements.closeProfilBtn.addEventListener('click', closeModal);
+            DOMElements.profilModal.addEventListener('click', (e) => { /* ... */ });
+            DOMElements.btnClearState.addEventListener('click', clearState);
+            DOMElements.notifikasiOkBtn.addEventListener('click', closeModal);
+            DOMElements.closeEksporLaporanBtn.addEventListener('click', closeModal);
+            DOMElements.eksporLaporanModal.addEventListener('click', (e) => { /* ... */ });
+            DOMElements.exportToExcelBtn.addEventListener('click', () => { /* ... */ });
+            DOMElements.exportToPdfBtn.addEventListener('click', () => { /* ... */ });
+            document.addEventListener('keydown', (e) => { /* ... */ });
+            
+            // ... (Listener Undo/Redo Perancangan tidak diubah) ...
+            const perancanganContent = DOMElements.tabContents.perancangan;
+            perancanganContent.addEventListener('click', e => { /* ... */ });
+
+            // ... (Listener Backup/Restore tidak diubah) ...
+            DOMElements.btnBackup.addEventListener('click', () => { /* ... */ });
+            DOMElements.btnRestore.addEventListener('click', () => { /* ... */ });
+            DOMElements.restoreFileInput.addEventListener('change', (event) => { /* ... */ });
+            
+            // --- EVENT LISTENER BARU ---
+            DOMElements.logoutBtn.addEventListener('click', handleLogout);
+        };
+
+        /**
+         * FUNGSI INIT ASLI (Di-rename)
+         * Ini hanya dijalankan SETELAH login berhasil.
+         */
+        const initAppLogic = () => {
+            if (loadState()) {
+                renderFromState();
+            } else {
+                renderFromState();
+            }
+            updateTabLockState();
+            showTab('identitas'); // Ini akan memanggil renderIdentitasPage(), yang akan mengunci field
+            setupEventListeners(); // Ini akan menambahkan listener untuk tombol logout dll
+        };
+        
+        /**
+         * FUNGSI INIT BARU (Titik Awal)
+         * Mengecek status login sebelum memulai aplikasi.
+         */
+        const init = () => {
+            const savedData = sessionStorage.getItem('schoolData');
+            if (savedData) {
+                // Jika sudah login (misal. baru refresh halaman)
+                const schoolData = JSON.parse(savedData);
+                identitasData = { ...identitasData, ...schoolData }; // Pra-isi state
+                DOMElements.appContainer.classList.remove('hidden');
+                initAppLogic();
+            } else {
+                // Jika belum login
+                DOMElements.loginModal.classList.remove('hidden');
+                DOMElements.loginBtn.addEventListener('click', handleLogin);
+                DOMElements.npsnInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleLogin();
+                });
+            }
+        };
+        
+        // Mulai aplikasi
+        init();
+    });
+    </script>
+</body>
+</html>
