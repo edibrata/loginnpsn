@@ -160,24 +160,45 @@
                 font-size: 1.5rem; /* 24px */
             }
          }
-    </style>
+    
+#template-identitas-btn,
+#ekspor-identitas-btn,
+#impor-identitas-btn,
+#import-identitas-file-input,
+#reset-identitas-btn {
+    display: none !important;
+}
+
+</style>
 </head>
 <body class="text-slate-800 p-4 sm:p-6 md:p-8"><div id="login-overlay-root">
 <style id="login-overlay-style">
-#login-overlay-root{position:fixed;inset:0;width:100vw;height:100vh;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:#0f172a !important;backdrop-filter:none !important;transition:opacity 280ms ease,visibility 280ms ease;opacity:1;visibility:visible;}
-#login-overlay-root.hidden{opacity:0;visibility:hidden;pointer-events:none;}
-#login-overlay-root .login-card-wrapper{max-width:560px;width:calc(100% - 48px);margin:24px;}
-#login-overlay-root .login-card-wrapper .bg-white{box-shadow:0 10px 40px rgba(2,6,23,0.12);border-radius:14px;}
-#modal-container{z-index:2147483001!important;}
-.locked-field{background-color:#f8fafc!important;cursor:not-allowed!important;}
+#login-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(224,242,254,0.95), rgba(249,250,251,0.95));
+  transition: opacity 300ms ease-in-out, visibility 300ms ease-in-out;
+  opacity: 1;
+  visibility: visible;
+}
+#login-overlay-root.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+#modal-container { z-index: 100000; }
 </style>
 
-<div class="login-card-wrapper"><!-- Kartu Login Utama --><div
-      class="bg-white w-full max-w-md p-8 md:p-10 rounded-2xl shadow-2xl transition-all"
+<!-- Kartu Login Utama --><div
+      class="bg-white w-full max-w-lg p-8 md:p-10 rounded-2xl shadow-2xl transition-all"
     >
       <div class="text-center">
         <h2 class="text-2xl font-bold text-sky-700 mb-2">
-          Login Generator Kokurikuler
+          Otentifikasi Generator Kokurikuler
         </h2>
         <p class="text-sm text-gray-500 mb-6">
           Masukkan kode NPSN sekolah Anda untuk melanjutkan.
@@ -311,7 +332,7 @@
         <!-- Footer Modal (Tombol-tombol di tengah, vertikal) --><div class="mt-6 flex flex-col items-center space-y-3">
           <!-- Tombol WhatsApp --><a
             id="whatsapp-button"
-            href="https://wa.me/6287773949015?text=Pa%20Edi%2C%20Saya%20ingin%20mendaftarkan%20sekolah%20saya%20karena%20NPSN%20belum%20terdaftar."
+            href="https://wa.me/6287773949015?text=Pa%20Edi%2C%20Saya%3A%0A-%20Nama%3A%0A-%20Sekolah%3A%0A-%20Kecamatan%3A%0A-%20Kabupaten%2FKota%3A%0A-%20Provinsi%3A%0A%0ANPSN%20sekolah%20saya%20tidak%20terdaftar%20sehingga%20tidak%20dapat%20login%20pada%20generator%20kokurikuler%20yang%20Bapak%20kembangkan.%0A%0AMohon%20bantuannya%2C%20terima%20kasih"
             target="_blank"
             class="hidden w-full px-6 py-3 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition flex items-center justify-center space-x-2"
           >
@@ -470,128 +491,103 @@
           prosesLogin();
         }
       });
-    </script></div></div>
-<script>(function(){ var keep = document.getElementById('login-overlay-root'); Array.from(document.body.children).forEach(function(ch){ if (ch !== keep) { try { ch.setAttribute('data-gemini-display', ch.style.display || ''); ch.setAttribute('data-gemini-hidden','true'); ch.style.display='none'; } catch(e){} } }); })();</script>
+    </script>
+</div>
+
+<script>
+(function(){
+  var keep = document.getElementById('login-overlay-root');
+  Array.from(document.body.children).forEach(function(ch){
+    if (ch !== keep) {
+      try { ch.setAttribute('data-gemini-display', ch.style.display || ''); ch.setAttribute('data-gemini-hidden', 'true'); ch.style.display = 'none'; } catch(e) {}
+    }
+  });
+})();
+</script>
+
 <script>
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3b7UQg-8NRHy27kQknyDCDjK2sDtOnGYYl2ocuUZuHj6toupDyyNIbDl-aVzBFZr86w/exec";
-function safeShowModal(title, htmlContent, type) {
-  try { showModal(title, htmlContent, type); } catch(e) { console.warn('showModal missing', e); alert(title + '\n' + (typeof htmlContent === 'string' ? htmlContent.replace(/<[^>]+>/g,'') : '')); }
+function safeShowModal(title, htmlContent, type) { try { showModal(title, htmlContent, type); } catch(e) { alert(title + "\n" + (typeof htmlContent === 'string' ? htmlContent.replace(/<[^>]+>/g,'') : '')); } }
+async function prosesLogin_fetch() {
+  const npsnInput = document.getElementById('npsn');
+  const npsn = npsnInput ? npsnInput.value.trim() : '';
+  if (!npsn) { safeShowModal('Input Tidak Valid', '<p>Silakan masukkan NPSN sekolah Anda.</p>', 'error'); return; }
+  setButtonLoading(true);
+  try {
+    const resp = await fetch(APPS_SCRIPT_URL + '?npsn=' + encodeURIComponent(npsn));
+    const json = await resp.json();
+    setButtonLoading(false);
+    if (json && json.status === 'success') {
+      try { sessionStorage.setItem('npsnData', JSON.stringify(json.data)); } catch(e){ console.warn('sessionStorage not available', e); }
+      const successHtml = '<p class="font-bold text-xl text-gray-900 mb-4">' + (json.data.namaSekolah||'') + '</p>' +
+        '<div class="text-gray-600 text-sm text-left inline-block">' +
+        '<p>NPSN: <span class="font-semibold text-gray-900">' + (json.data.npsn||npsn) + '</span></p>' +
+        '<p>Kecamatan: <span class="font-semibold text-gray-900">' + (json.data.kecamatan||'') + '</span></p>' +
+        '<p>Kabupaten/Kota: <span class="font-semibold text-gray-900">' + (json.data.kabupaten||'') + '</span></p>' +
+        '<p>Provinsi: <span class="font-semibold text-gray-900">' + (json.data.provinsi||'') + '</span></p>' +
+        '</div>';
+      safeShowModal('Login Berhasil', successHtml, 'success');
+      const closeBtn = document.getElementById('close-modal-button');
+      if (closeBtn) { closeBtn.onclick = function() { closeModal(); proceedToGemini(); }; }
+    } else {
+      const errHtml = '<p>NPSN tidak ditemukan atau belum terdaftar.</p><p class="mt-2">Silakan hubungi pengembang untuk bantuan pendaftaran.</p>';
+      safeShowModal('Login Gagal', errHtml, 'error');
+    }
+  } catch(err) {
+    setButtonLoading(false);
+    const errorHtml = '<p>Terjadi kesalahan saat menghubungi server. Silakan coba lagi nanti.</p><p class="mt-2 text-xs text-gray-400">Error: ' + (err.message||err) + '</p>';
+    safeShowModal('Error', errorHtml, 'error');
+    console.error('Fetch error', err);
+  }
+}
+function proceedToGemini() {
+  const overlay = document.getElementById('login-overlay-root');
+  if (overlay) { overlay.classList.add('hidden'); setTimeout(function(){ overlay.remove(); }, 350); }
+  const modal = document.getElementById('modal-container'); if (modal) modal.remove();
+  document.querySelectorAll('[data-gemini-hidden]').forEach(function(el){ el.style.display = el.getAttribute('data-gemini-display')||''; el.removeAttribute('data-gemini-hidden'); el.removeAttribute('data-gemini-display'); });
+  setTimeout(function(){ try{ var saved = JSON.parse(sessionStorage.getItem('npsnData')||'{}'); initGeminiForm(saved); }catch(e){console.warn('init error',e);} }, 400);
 }
 function setButtonLoading(isLoading) {
   var loginButton = document.getElementById('loginButton');
   var spinner = document.getElementById('button-spinner');
   var icon = document.getElementById('button-icon');
   var btnText = document.getElementById('button-text');
-  if (loginButton) loginButton.disabled = !!isLoading;
+  if (loginButton) loginButton.disabled = isLoading;
   if (spinner) spinner.classList.toggle('hidden', !isLoading);
   if (icon) icon.classList.toggle('hidden', isLoading);
   if (btnText) btnText.textContent = isLoading ? 'Memeriksa...' : 'Masuk';
 }
-async function prosesLogin_fetch() {
-  var npsnInput = document.getElementById('npsn');
-  var npsn = npsnInput ? npsnInput.value.trim() : '';
-  if (!npsn) { safeShowModal('Input Tidak Valid', '<p>Silakan masukkan NPSN sekolah Anda.</p>', 'error'); return; }
-  setButtonLoading(true);
-  try {
-    var resp = await fetch(APPS_SCRIPT_URL + '?npsn=' + encodeURIComponent(npsn));
-    var json = await resp.json();
-    setButtonLoading(false);
-    if (json && json.status === 'success') {
-      try { localStorage.setItem('loginData', JSON.stringify(json.data)); localStorage.setItem('loginTimestamp', Date.now().toString()); } catch(e){ console.warn('localStorage not available', e); }
-
-      // Only body content (no duplicate icon/title)
-      var successHtml = '\
-        <p class="font-bold text-2xl text-gray-900 mb-4">' + (json.data.namaSekolah || '') + '</p>\
-        <div class="text-gray-600 text-sm text-left inline-block space-y-1">\
-          <p>NPSN: <span class="font-semibold text-gray-900">' + (json.data.npsn || npsn) + '</span></p>\
-          <p>Kecamatan: <span class="font-semibold text-gray-900">' + (json.data.kecamatan || '') + '</span></p>\
-          <p>Kabupaten: <span class="font-semibold text-gray-900">' + (json.data.kabupaten || '') + '</span></p>\
-          <p>Provinsi: <span class="font-semibold text-gray-900">' + (json.data.provinsi || '') + '</span></p>\
-        </div>';
-
-      safeShowModal('Login Berhasil', successHtml, 'success');
-      var closeBtn = document.getElementById('close-modal-button');
-      if (closeBtn) { closeBtn.onclick = function() { closeModal(); proceedToGemini(); }; }
-    } else {
-      var errorHtml = '\
-        <p>NPSN tidak ditemukan atau belum terdaftar.</p>\
-        <p class="mt-2">Silakan hubungi pengembang untuk bantuan pendaftaran.</p>\
-      ';
-      safeShowModal('Login Gagal', errorHtml, 'error');
-    }
-  } catch(err) {
-    setButtonLoading(false);
-    var errorHtml = '<p>Terjadi kesalahan saat menghubungi server. Silakan coba lagi nanti.</p><p class="mt-2 text-xs text-gray-400">Error: ' + (err.message || err) + '</p>';
-    safeShowModal('Error', errorHtml, 'error');
-    console.error('Fetch error', err);
-  }
-}
-
-function proceedToGemini() {
-  var overlay = document.getElementById('login-overlay-root');
-  if (overlay) { overlay.classList.add('hidden'); setTimeout(function(){ try{ overlay.remove(); }catch(e){} }, 320); }
-  var modal = document.getElementById('modal-container'); if (modal) modal.remove();
-  document.querySelectorAll('[data-gemini-hidden]').forEach(function(el){ el.style.display = el.getAttribute('data-gemini-display') || ''; el.removeAttribute('data-gemini-hidden'); el.removeAttribute('data-gemini-display'); });
-  setTimeout(function(){ try{ var saved = JSON.parse(localStorage.getItem('loginData') || '{}'); initGeminiForm(saved); setTimeout(startAntiManipulationWatch, 5000); }catch(e){console.warn(e);} }, 480);
-}
-
 function initGeminiForm(data) {
-  if (!data || Object.keys(data).length === 0) return;
-  var mapping = { namaSekolah: 'namaSekolah', npsn: 'npsnSekolah', alamat: 'alamatSekolah', desa: 'namaDesa', kecamatan: 'namaKecamatan', kabupaten: 'namaKabupaten', provinsi: 'namaProvinsi' };
-  Object.keys(mapping).forEach(function(key){ 
-    var id = mapping[key];
-    var el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
-    if (!el) return;
-    try { 
-      if (el.tagName.toLowerCase() === 'select') { 
-        var found = Array.from(el.options).find(function(o){ return (o.value === (data[key] || '')) || (o.text === (data[key] || '')); });
-        if (!found) { var opt = document.createElement('option'); opt.value = data[key] || ''; opt.text = data[key] || ''; el.appendChild(opt); el.value = opt.value; } else { el.value = found.value || found.text; }
-        el.disabled = true;
-      } else { 
-        el.value = data[key] || '';
-        el.readOnly = true;
-      }
-      el.classList.add('locked-field');
-    } catch(e){ console.warn('init field error', id, e); }
+  if (!data || Object.keys(data).length===0) return;
+  var map = {
+    namaSekolah: ['namaSekolah','sekolahNama','inputNamaSekolah','NamaSekolah','identitas_namaSekolah'],
+    npsn: ['npsn','inputNpsn','npsnInput','identitas_npsn'],
+    alamat: ['alamat','alamatSekolah','inputAlamat','identitas_alamat'],
+    desa: ['namaDesa','namaDesaKelurahan','desaKelurahan','desa','kelurahan','inputDesa','identitas_desa'],
+    kecamatan: ['kecamatan','inputKecamatan','identitas_kecamatan'],
+    kabupaten: ['namaKabupaten','namaKabupatenKota','kabupatenKotaSelect','kabupaten','kabupatenKota','inputKabupaten','identitas_kabupaten'],
+    provinsi: ['provinsi','inputProvinsi','identitas_provinsi']
+  };
+  Object.keys(map).forEach(function(key){
+    var possibles = map[key]; var found = null;
+    for (var i=0;i<possibles.length;i++){ var id = possibles[i]; var el = document.getElementById(id) || document.querySelector('[name="'+id+'"]'); if (el){ found = el; break; } }
+    if (found){
+      try{
+        if (found.tagName.toLowerCase()==='select'){
+          var opt = Array.from(found.options).find(function(o){return o.value===(data[key]||'');});
+          if (!opt){ opt = document.createElement('option'); opt.value = data[key]||''; opt.text = data[key]||''; found.appendChild(opt); }
+          found.value = opt.value; found.disabled = true;
+        } else {
+          found.value = data[key]||''; found.readOnly = true;
+        }
+        found.style.backgroundColor = '#f8fafc'; found.style.cursor = 'not-allowed';
+      } catch(e){ console.warn('set field', e); }
+    }
   });
 }
-
-var antiManipInterval = null;
-function startAntiManipulationWatch() {
-  try {
-    var saved = JSON.parse(localStorage.getItem('loginData') || '{}');
-    if (!saved || !saved.namaSekolah || !saved.npsn) return;
-    if (antiManipInterval) clearInterval(antiManipInterval);
-    antiManipInterval = setInterval(function(){
-      try {
-        var curNama = document.getElementById('namaSekolah') ? document.getElementById('namaSekolah').value : null;
-        var curNpsn = document.getElementById('npsnSekolah') ? document.getElementById('npsnSekolah').value : null;
-        if (curNama !== null && curNpsn !== null) {
-          if (curNama !== saved.namaSekolah || curNpsn !== saved.npsn) {
-            console.warn('Manipulation detected - clearing session and redirecting to login');
-            localStorage.removeItem('loginData'); localStorage.removeItem('loginTimestamp');
-            location.reload();
-          }
-        }
-      } catch(e) { console.error(e); localStorage.removeItem('loginData'); localStorage.removeItem('loginTimestamp'); location.reload(); }
-    }, 1000);
-  } catch(e){ console.warn('startAntiManipulationWatch failed', e); }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  var lb = document.getElementById('loginButton'); if (lb) { lb.removeAttribute('onclick'); lb.addEventListener('click', function(e){ e.preventDefault(); prosesLogin_fetch(); }); }
-  var npsnInp = document.getElementById('npsn'); if (npsnInp) { npsnInp.addEventListener('keypress', function(ev){ if (ev.key === 'Enter'){ ev.preventDefault(); prosesLogin_fetch(); } }); }
-  try {
-    var saved = JSON.parse(localStorage.getItem('loginData') || '{}');
-    if (saved && saved.namaSekolah && saved.npsn) {
-      var overlay = document.getElementById('login-overlay-root');
-      if (overlay) { overlay.remove(); }
-      document.querySelectorAll('[data-gemini-hidden]').forEach(function(el){ el.style.display = el.getAttribute('data-gemini-display') || ''; el.removeAttribute('data-gemini-hidden'); el.removeAttribute('data-gemini-display'); });
-      try { initGeminiForm(saved); setTimeout(startAntiManipulationWatch, 5000); } catch(e) { console.warn(e); }
-    } else {
-      // overlay remains visible
-    }
-  } catch(e) { console.warn('init load failed', e); }
+document.addEventListener('DOMContentLoaded', function(){
+  var lb = document.getElementById('loginButton'); if (lb){ lb.removeAttribute('onclick'); lb.addEventListener('click', function(e){ e.preventDefault(); prosesLogin_fetch(); }); }
+  var npsnInp = document.getElementById('npsn'); if (npsnInp){ npsnInp.addEventListener('keypress', function(ev){ if (ev.key==='Enter'){ ev.preventDefault(); prosesLogin_fetch(); } }); }
 });
 </script>
 
@@ -627,7 +623,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         </button>
                         <span class="tooltip" role="tooltip">Pengembang</span>
                     </div>
-                </div>
+                
+                    <div class="tooltip-container">
+                        <button id="logout-btn" aria-label="Keluar / Logout" class="w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-red-100 rounded-full text-red-600 transition-colors" type="button">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                        <span class="tooltip" role="tooltip">Keluar / Logout</span>
+                    </div></div>
             </header>
 
             <!-- Tab Navigation -->
@@ -4013,5 +4015,413 @@ Data Murid:\n${detailedData}`;
     });
     </script>
 
+
+<!-- Logout Modal -->
+<div id="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-title" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+    <div class="p-5 border-b">
+      <h3 id="logout-title" class="text-lg font-bold text-slate-800">
+        <i class="fas fa-sign-out-alt mr-2 text-red-600"></i>Keluar dari Aplikasi
+      </h3>
+      <p class="text-slate-600 mt-2">Pilih tindakan berikut:</p>
+    </div>
+    <div class="p-6 flex flex-col gap-3">
+      <button id="logout-save-btn" class="px-4 py-2 bg-sky-600 text-white font-medium rounded-md shadow-sm hover:bg-sky-700">Keluar dan Simpan</button>
+      <button id="logout-clear-btn" class="px-4 py-2 bg-red-600 text-white font-medium rounded-md shadow-sm hover:bg-red-700">Keluar dan Bersihkan</button>
+      <button id="logout-cancel-btn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auto Logout Warning Modal -->
+<div id="auto-logout-warning" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 text-center">
+    <h3 class="text-lg font-semibold text-slate-800 mb-3">Tidak Ada Aktivitas</h3>
+    <p class="text-slate-600 mb-6">Tidak ada aktivitas selama 25 menit.<br>Anda akan otomatis keluar dalam <strong>5 menit</strong>.</p>
+    <div class="flex justify-center gap-4">
+      <button id="stay-active-btn" class="px-5 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Tetap Aktif</button>
+      <button id="logout-now-btn" class="px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Keluar Sekarang</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  function lockIdentitasFields() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('npsnData') || '{}');
+      if (!saved || Object.keys(saved).length === 0) return;
+
+      const map = {
+        namaSekolah: ['namaSekolah'],
+        npsn: ['npsn'],
+        alamat: ['alamat'],
+        kecamatan: ['kecamatan'],
+        provinsi: ['provinsi'],
+        namaDesa: ['namaDesa','namaDesaKelurahan'],
+        namaKabupaten: ['namaKabupaten','namaKabupatenKota'],
+        dropdownDesa: ['desaKelurahan','desaKelurahanSelect'],
+        dropdownKabupaten: ['kabupatenKota','kabupatenKotaSelect']
+      };
+
+      Object.keys(map).forEach(key => {
+        map[key].forEach(id => {
+          const el = document.getElementById(id) || document.querySelector(`[name="${id}"]`);
+          if (!el) return;
+          const tag = el.tagName.toLowerCase();
+          const value = saved[key] || el.value || '';
+
+          if (tag === 'input') {
+            el.value = value;
+            el.readOnly = true;
+            el.style.backgroundColor = '#f8fafc';
+            el.style.cursor = 'not-allowed';
+          } else if (tag === 'select') {
+            let localKey = `selected_${id}`;
+            if (id.toLowerCase().includes('desa')) localKey = 'selected_desa';
+            if (id.toLowerCase().includes('kabupatenkota')) localKey = 'selected_kabupatenkota';
+
+            const lastSelected = localStorage.getItem(localKey);
+            if (lastSelected && lastSelected !== '') el.value = lastSelected;
+
+            if (!el.value && value) {
+              [...el.options].forEach(opt => {
+                if (opt.text.trim().toLowerCase() === value.trim().toLowerCase()) {
+                  el.value = opt.value;
+                }
+              });
+            }
+
+            if (!el.value && el.options.length > 1) el.value = el.options[1].value;
+
+            if (id.toLowerCase().includes('desa') || id.toLowerCase().includes('kabupatenkota')) {
+              el.disabled = false;
+              el.style.backgroundColor = '#ffffff';
+              el.style.cursor = 'pointer';
+              el.onchange = () => localStorage.setItem(localKey, el.value);
+            } else {
+              el.disabled = true;
+              el.style.backgroundColor = '#f8fafc';
+              el.style.cursor = 'not-allowed';
+            }
+          }
+        });
+      });
+    } catch (err) {
+      console.warn('Gagal mengunci identitas:', err);
+    }
+  }
+
+  lockIdentitasFields();
+
+  const tabIdentitas = document.getElementById('tab-identitas');
+  if (tabIdentitas) {
+    tabIdentitas.addEventListener('click', () => setTimeout(lockIdentitasFields, 400));
+  }
+
+  const identitasContainer = document.getElementById('identitas-content');
+  if (identitasContainer && 'MutationObserver' in window) {
+    const observer = new MutationObserver(() => setTimeout(lockIdentitasFields, 400));
+    observer.observe(identitasContainer, { childList: true, subtree: true });
+  }
+});
+</script>
+
 </body>
+
+<script>
+(function(){
+  // Non-intrusive Logout & Auto-Logout script that reads/writes only localStorage/sessionStorage
+  const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 minutes
+  const WARNING_TIME = 25 * 60 * 1000; // 25 minutes
+  let warningTimer=null, logoutTimer=null;
+
+  function showAutoLogoutWarning(){ var w = document.getElementById('auto-logout-warning'); if(w) w.classList.remove('hidden'); }
+  function hideAutoLogoutWarning(){ var w = document.getElementById('auto-logout-warning'); if(w) w.classList.add('hidden'); }
+
+  function saveAppStateToSavedSession(){
+    try {
+      var keys = ['identitasData','kegiatanData','muridData','daftarMurid'];
+      var data = {};
+      keys.forEach(function(k){
+        try { data[k]= JSON.parse(localStorage.getItem(k) || 'null'); } catch(e) { data[k]= localStorage.getItem(k); }
+      });
+      var active = localStorage.getItem('activeTab') || 'identitas';
+      localStorage.setItem('savedSession', JSON.stringify({ data: data, activeTab: active }));
+    } catch(e){ console.warn('saveAppStateToSavedSession error', e); }
+  }
+
+  function performSaveAndLogout(){
+    saveAppStateToSavedSession();
+    try{ sessionStorage.clear(); }catch(e){}
+    // go to login overlay: reload page to reset UI and show login overlay
+    location.reload();
+  }
+
+  function performClearAndLogout(){
+    try{ localStorage.clear(); sessionStorage.clear(); }catch(e){}
+    location.reload();
+  }
+
+  function resetTimers(){
+    try{ clearTimeout(warningTimer); clearTimeout(logoutTimer); }catch(e){}
+    warningTimer = setTimeout(showAutoLogoutWarning, WARNING_TIME);
+    logoutTimer = setTimeout(performSaveAndLogout, INACTIVITY_LIMIT);
+  }
+
+  ['click','mousemove','keypress','scroll','focus'].forEach(function(ev){
+    window.addEventListener(ev, resetTimers, {passive:true});
+  });
+
+  // Start timers after short delay to avoid triggering during initial load
+  setTimeout(resetTimers, 1000);
+
+  // Wire up modal and button interactions safely (elements may load earlier or later)
+  function onReady(){
+    var logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', function(){ var m = document.getElementById('logout-modal'); if(m) m.classList.remove('hidden'); });
+
+    var btnCancel = document.getElementById('logout-cancel-btn');
+    if (btnCancel) btnCancel.addEventListener('click', function(){ var m = document.getElementById('logout-modal'); if(m) m.classList.add('hidden'); });
+
+    var btnSave = document.getElementById('logout-save-btn');
+    if (btnSave) btnSave.addEventListener('click', function(){ performSaveAndLogout(); });
+
+    var btnClear = document.getElementById('logout-clear-btn');
+    if (btnClear) btnClear.addEventListener('click', function(){ performClearAndLogout(); });
+
+    var stayActive = document.getElementById('stay-active-btn');
+    if (stayActive) stayActive.addEventListener('click', function(){ hideAutoLogoutWarning(); resetTimers(); });
+
+    var logoutNow = document.getElementById('logout-now-btn');
+    if (logoutNow) logoutNow.addEventListener('click', function(){ performSaveAndLogout(); });
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') { onReady(); } else { document.addEventListener('DOMContentLoaded', onReady); }
+
+  // When user logs in (proceedToGemini), try to restore savedSession if present BEFORE proceeding
+  try {
+    var origProceed = window.proceedToGemini;
+    window.proceedToGemini = function(){
+      try {
+        var s = localStorage.getItem('savedSession');
+        if (s) {
+          try {
+            var obj = JSON.parse(s);
+            if (obj && obj.data) {
+              // restore known keys to localStorage so app init picks them up
+              try { localStorage.setItem('identitasData', JSON.stringify(obj.data.identitasData||{})); } catch(e){}
+              try { localStorage.setItem('kegiatanData', JSON.stringify(obj.data.kegiatanData||{})); } catch(e){}
+              try { localStorage.setItem('muridData', JSON.stringify(obj.data.muridData||{})); } catch(e){}
+              try { localStorage.setItem('daftarMurid', JSON.stringify(obj.data.daftarMurid||[])); } catch(e){}
+              if (obj.activeTab) { localStorage.setItem('activeTab', obj.activeTab); }
+            }
+          } catch(e){ console.warn('restore savedSession parse', e); }
+        }
+      } catch(e){}
+      if (typeof origProceed === 'function') { try { return origProceed.apply(this, arguments); } catch(e){ console.warn('origProceed error', e); } }
+    };
+  } catch(e){ console.warn('wrap proceedToGemini error', e); }
+
+})();</script>
+
+
+<script>
+// --- Gemini compatibility & safe-restore helper (v1) ---
+(function(){
+  // avoid double-injection
+  if (window._gemini_compat_injected) return;
+  window._gemini_compat_injected = true;
+
+  function safeJSON(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
+  function isEmpty(v){ return v === undefined || v === null || String(v).trim() === ''; }
+
+  // Robust resolver: try multiple possible keys in data object
+  function resolve(data, keys){
+    if (!data || !keys) return null;
+    for (var i=0;i<keys.length;i++){
+      try{
+        var k = keys[i];
+        if (!k) continue;
+        if (Object.prototype.hasOwnProperty.call(data, k) && !isEmpty(data[k])) return data[k];
+      }catch(e){}
+    }
+    return null;
+  }
+
+  // Populate identity-related form fields from available sources (localStorage, sessionStorage, savedSession)
+  function populateIdentityFields(){
+    try{
+      var sources = [];
+
+      // prefer live identitasData in localStorage
+      var ident = safeJSON(localStorage.getItem('identitasData'));
+      if (ident) sources.push(ident);
+
+      // sessionStorage npsnData (login payload)
+      var s = safeJSON(sessionStorage.getItem('npsnData'));
+      if (s) sources.push(s);
+
+      // savedSession (may contain data snapshot)
+      var saved = safeJSON(localStorage.getItem('savedSession'));
+      if (saved && saved.data && saved.data.identitasData) sources.push(saved.data.identitasData);
+
+      // merge sources (first non-empty wins per field)
+      var merged = {};
+      sources.forEach(function(src){
+        if (!src) return;
+        Object.keys(src).forEach(function(k){
+          if (isEmpty(merged[k]) && !isEmpty(src[k])) merged[k] = src[k];
+        });
+      });
+
+      // Resolve Desa and Kabupaten from multiple possible keys
+      var desaVal = resolve(merged, ['namaDesaKelurahan','namaDesa','desa','kelurahan','namaDesaText','desaKelurahan']);
+      var kabVal = resolve(merged, ['namaKabupatenKota','namaKabupaten','kabupaten','kota','kabupatenKota','namaKabupatenText']);
+
+      // Fill input elements if found (id or name)
+      function setIfExists(selector, value){
+        if (isEmpty(value)) return;
+        try{
+          var el = document.querySelector(selector);
+          if (!el) return;
+          // for inputs/selects/textarea
+          if ('value' in el) {
+            if (isEmpty(el.value) || String(el.value).trim() === '') el.value = value;
+          } else {
+            el.textContent = value;
+          }
+          // trigger input event
+          var ev = new Event('input', { bubbles: true });
+          el.dispatchEvent(ev);
+        }catch(e){}
+      }
+
+      // Desa: try id then name variants
+      setIfExists('#namaDesa', desaVal);
+      setIfExists('[name="namaDesaKelurahan"]', desaVal);
+      setIfExists('[name="namaDesa"]', desaVal);
+
+      // Kabupaten
+      setIfExists('#namaKabupaten', kabVal);
+      setIfExists('[name="namaKabupatenKota"]', kabVal);
+      setIfExists('[name="namaKabupaten"]', kabVal);
+      setIfExists('[name="namaKabupatenKota"]', kabVal);
+
+    }catch(e){ console.warn('populateIdentityFields error', e); }
+  }
+
+  // Safe restore function: only write non-null valid keys back to localStorage
+  window._gemini_safeRestoreSavedSession = function(){
+    try{
+      var raw = localStorage.getItem('savedSession');
+      if (!raw) return false;
+      var obj = safeJSON(raw);
+      if (!obj || !obj.data) return false;
+      var data = obj.data;
+
+      // Only set keys if they are non-null and non-empty (do not overwrite good data with null)
+      function safeSet(key, value){
+        try{
+          if (value === null || value === undefined) return;
+          // avoid writing empty object/array that is not useful
+          if (typeof value === 'object') {
+            var str = JSON.stringify(value||{});
+            if (str === '{}' || str === '[]') return;
+            localStorage.setItem(key, str);
+            return;
+          }
+          if (String(value).trim() === '') return;
+          localStorage.setItem(key, String(value));
+        }catch(e){}
+      }
+
+      if (data.identitasData) safeSet('identitasData', data.identitasData);
+      if (data.kegiatanData) safeSet('kegiatanData', data.kegiatanData);
+      if (data.muridData) safeSet('muridData', data.muridData);
+      if (Array.isArray(data.daftarMurid) && data.daftarMurid.length>0) safeSet('daftarMurid', data.daftarMurid);
+      if (obj.activeTab) safeSet('activeTab', obj.activeTab);
+
+      return true;
+    }catch(e){ console.warn('safeRestoreSavedSession error', e); return false; }
+  };
+
+  // Replace existing restoreSavedSession if present with safer version
+  try{
+    if (typeof window.restoreSavedSession === 'function') {
+      var origRestore = window.restoreSavedSession;
+      window.restoreSavedSession = function(){
+        try{
+          // prefer safe restore
+          return window._gemini_safeRestoreSavedSession() || origRestore();
+        }catch(e){ try{ return origRestore(); }catch(er){ return false; } }
+      };
+    } else {
+      window.restoreSavedSession = window._gemini_safeRestoreSavedSession;
+    }
+  }catch(e){ window.restoreSavedSession = window._gemini_safeRestoreSavedSession; }
+
+  // Hook into proceedToGemini: after login completes, perform populateIdentityFields()
+  try{
+    var orig = window.proceedToGemini;
+    window.proceedToGemini = function(){
+      try{
+        // run original (login flow) first
+        var res = (typeof orig === 'function') ? orig.apply(this, arguments) : null;
+        // after a short delay, attempt safe restore and populate identity fields
+        setTimeout(function(){
+          try{
+            window._gemini_safeRestoreSavedSession();
+          }catch(e){}
+          try{ populateIdentityFields(); }catch(e){}
+        }, 300);
+        return res;
+      }catch(e){ console.warn('wrapped proceedToGemini error', e); return (typeof orig === 'function') ? orig.apply(this, arguments) : null; }
+    };
+  }catch(e){ console.warn('wrap proceedToGemini failed', e); }
+
+  // Also run populate on DOMContentLoaded and a bit later (for cases restore happened earlier)
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(populateIdentityFields, 500);
+    setTimeout(populateIdentityFields, 1200);
+  } else {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(populateIdentityFields, 300); setTimeout(populateIdentityFields, 1200); });
+  }
+
+  // Expose helper for debugging
+  window._gemini_helpers = window._gemini_helpers || {};
+  window._gemini_helpers.populateIdentityFields = populateIdentityFields;
+  window._gemini_helpers.safeRestoreSavedSession = window._gemini_safeRestoreSavedSession;
+
+})(); 
+</script>
+
 </html>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem('npsnData') || '{}');
+    if (Object.keys(saved).length > 0) {
+      initGeminiForm(saved);
+    }
+  } catch (e) {
+    console.warn('Auto-lock identitas failed', e);
+  }
+});
+</script>
