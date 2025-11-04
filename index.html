@@ -540,12 +540,47 @@ async function prosesLogin_fetch() {
     console.error('Fetch error', err);
   }
 }
+
 function proceedToGemini() {
   const overlay = document.getElementById('login-overlay-root');
-  if (overlay) { overlay.classList.add('hidden'); setTimeout(function(){ overlay.remove(); }, 350); }
-  const modal = document.getElementById('modal-container'); if (modal) modal.remove();
-  document.querySelectorAll('[data-gemini-hidden]').forEach(function(el){ el.style.display = el.getAttribute('data-gemini-display')||''; el.removeAttribute('data-gemini-hidden'); el.removeAttribute('data-gemini-display'); });
-  setTimeout(function(){ try{ var saved = JSON.parse(sessionStorage.getItem('npsnData')||'{}'); initGeminiForm(saved); }catch(e){console.warn('init error',e);} }, 400);
+  if (overlay) { 
+    overlay.classList.add('hidden');
+    // Hapus overlay setelah transisi
+    setTimeout(function() { overlay.remove(); }, 350); 
+  }
+
+  // Jalankan logika pemulihan SEKARANG
+  var restored = false;
+  try {
+    restored = window._gemini_safeRestoreSavedSession(); 
+    if(restored) console.info("Sesi tersimpan berhasil dipulihkan.");
+  } catch(e) {
+     console.warn('Restore attempt failed', e);
+  }
+
+  // TENTUKAN TINDAKAN
+  if (restored) {
+    // 1. Jika data dipulihkan, reload halaman untuk memuat state baru
+    location.reload();
+  } else {
+    // 2. Jika tidak ada data pulihan (login baru), tampilkan aplikasi
+    const modal = document.getElementById('modal-container'); 
+    if (modal) modal.remove();
+    
+    document.querySelectorAll('[data-gemini-hidden]').forEach(function(el){ 
+      el.style.display = el.getAttribute('data-gemini-display')||''; 
+      el.removeAttribute('data-gemini-hidden'); 
+      el.removeAttribute('data-gemini-display'); 
+    });
+    
+    // Panggil initGeminiForm setelah aplikasi terlihat
+    setTimeout(function(){ 
+      try{ 
+        var saved = JSON.parse(sessionStorage.getItem('npsnData')||'{}'); 
+        initGeminiForm(saved); 
+      } catch(e){ console.warn('init error',e); } 
+    }, 400);
+  }
 }
 function setButtonLoading(isLoading) {
   var loginButton = document.getElementById('loginButton');
@@ -4141,6 +4176,94 @@ document.addEventListener('DOMContentLoaded', () => {
     observer.observe(identitasContainer, { childList: true, subtree: true });
   }
 });
+
+
+// ====== START OF V13.3 INTEGRITY FIXED PATCH ======
+
+// 1. Penanganan LocalStorage Penuh
+function saveState(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    if (e.name === "QuotaExceededError") {
+      showNotification("Penyimpanan penuh! Hapus data lama atau ekspor hasil terlebih dahulu.", "error");
+    } else {
+      console.error("Gagal menyimpan state:", e);
+    }
+  }
+}
+
+// 2. Pembersihan Data Asesmen Yatim
+function cleanOrphanedAsesmen() {
+  try {
+    const validSubdimensi = new Set();
+    if (typeof kegiatanData === "undefined" || typeof muridData === "undefined") return;
+    kegiatanData.forEach(k => {
+      if (k.dimensi) {
+        k.dimensi.forEach(d => {
+          if (d.subdimensi) {
+            d.subdimensi.forEach(sd => validSubdimensi.add(sd.id));
+          }
+        });
+      }
+    });
+
+    Object.keys(muridData).forEach(muridId => {
+      const asesmen = muridData[muridId].asesmen || {};
+      Object.keys(asesmen).forEach(subdimId => {
+        if (!validSubdimensi.has(subdimId)) {
+          delete asesmen[subdimId];
+        }
+      });
+    });
+  } catch (e) {
+    console.warn("cleanOrphanedAsesmen gagal:", e);
+  }
+}
+
+// 3. Modifikasi captureAndSavePerancanganState agar memanggil cleanOrphanedAsesmen()
+if (typeof captureAndSavePerancanganState === "function") {
+  const originalCapture = captureAndSavePerancanganState;
+  captureAndSavePerancanganState = function() {
+    originalCapture();
+    cleanOrphanedAsesmen();
+    saveState("muridData", muridData);
+  };
+}
+
+// 4. Refactor getExportData agar membaca dari state, bukan tabel
+function getExportData() {
+  const exportRows = [];
+
+  try {
+    Object.values(muridData || {}).forEach(murid => {
+      const row = {
+        Nama: murid.nama || "",
+        NISN: murid.nisn || "",
+        Nilai: {}
+      };
+
+      (kegiatanData || []).forEach(kegiatan => {
+        (kegiatan.dimensi || []).forEach(dim => {
+          (dim.subdimensi || []).forEach(sd => {
+            const nilai = murid.asesmen?.[sd.id] || "-";
+            row.Nilai[sd.nama] = nilai;
+          });
+        });
+      });
+
+      exportRows.push(row);
+    });
+  } catch (e) {
+    console.error("Gagal mengambil data ekspor:", e);
+  }
+
+  return exportRows;
+}
+
+// ====== END OF V13.3 INTEGRITY FIXED PATCH ======
+
+
 </script>
 
 </body>
@@ -4155,21 +4278,60 @@ document.addEventListener('DOMContentLoaded', () => {
   function showAutoLogoutWarning(){ var w = document.getElementById('auto-logout-warning'); if(w) w.classList.remove('hidden'); }
   function hideAutoLogoutWarning(){ var w = document.getElementById('auto-logout-warning'); if(w) w.classList.add('hidden'); }
 
-  function saveAppStateToSavedSession(){
-    try {
+  
+function saveAppStateToSavedSession(){
+  try {
+    var raporRaw = localStorage.getItem('raporKokurikulerState');
+    var snapshot = { data: {}, activeTab: localStorage.getItem('activeTab') || 'identitas' };
+
+    if (raporRaw) {
+      try {
+        var parsed = JSON.parse(raporRaw);
+        if (parsed && typeof parsed === 'object') {
+          snapshot.data = {
+            identitasData: parsed.identitasData || null,
+            kegiatanData: parsed.kegiatanData || null,
+            muridData: parsed.muridData || null,
+            daftarMurid: Array.isArray(parsed.daftarMurid) ? parsed.daftarMurid : (parsed.daftarMurid || null)
+          };
+        }
+      } catch(e) {
+        console.warn('Parsing raporKokurikulerState failed, falling back to per-key read', e);
+      }
+    }
+
+    function isAllNull(obj){
+      if(!obj || typeof obj !== 'object') return true;
+      return Object.keys(obj).every(function(k){ return obj[k] === null || obj[k] === undefined; });
+    }
+
+    if (isAllNull(snapshot.data)) {
       var keys = ['identitasData','kegiatanData','muridData','daftarMurid'];
       var data = {};
       keys.forEach(function(k){
-        try { data[k]= JSON.parse(localStorage.getItem(k) || 'null'); } catch(e) { data[k]= localStorage.getItem(k); }
+        try {
+          var raw = localStorage.getItem(k);
+          data[k] = raw === null ? null : (function(){
+            try { return JSON.parse(raw); } catch(e) { return raw; }
+          })();
+        } catch(e) { data[k] = null; }
       });
-      var active = localStorage.getItem('activeTab') || 'identitas';
-      localStorage.setItem('savedSession', JSON.stringify({ data: data, activeTab: active }));
-    } catch(e){ console.warn('saveAppStateToSavedSession error', e); }
-  }
+      snapshot.data = data;
+      snapshot.activeTab = localStorage.getItem('activeTab') || snapshot.activeTab;
+    }
 
-  function performSaveAndLogout(){
-    saveAppStateToSavedSession();
-    try{ sessionStorage.clear(); }catch(e){}
+    localStorage.setItem('savedSession', JSON.stringify(snapshot));
+  } catch(e){
+    console.warn('saveAppStateToSavedSession error', e);
+  }
+}
+
+function performSaveAndLogout(){
+  try { saveAppStateToSavedSession(); } catch(e){ console.warn('performSaveAndLogout: save failed', e); }
+  try{ sessionStorage.clear(); }catch(e){}
+  location.reload();
+}
+catch(e){}
     // go to login overlay: reload page to reset UI and show login overlay
     location.reload();
   }
@@ -4215,7 +4377,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') { onReady(); } else { document.addEventListener('DOMContentLoaded', onReady); }
 
-  // When user logs in (proceedToGemini), try to restore savedSession if present BEFORE proceeding
+  // Panggil onReady() di lokasi yang benar agar listener logout aktif
+if (document.readyState === 'complete' || document.readyState === 'interactive') { onReady(); } 
+else { document.addEventListener('DOMContentLoaded', onReady); }
+
+// When user logs in (proceedToGemini), try to restore savedSession if present BEFORE proceeding
   try {
     var origProceed = window.proceedToGemini;
     window.proceedToGemini = function(){
@@ -4328,39 +4494,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Safe restore function: only write non-null valid keys back to localStorage
-  window._gemini_safeRestoreSavedSession = function(){
-    try{
-      var raw = localStorage.getItem('savedSession');
-      if (!raw) return false;
-      var obj = safeJSON(raw);
-      if (!obj || !obj.data) return false;
-      var data = obj.data;
+  
+window._gemini_safeRestoreSavedSession = function(){
+  try{
+    var raw = localStorage.getItem('savedSession');
+    if (!raw) return false;
+    var obj = JSON.parse(raw);
+    if (!obj || !obj.data) return false;
+    var data = obj.data;
+    var activeTab = obj.activeTab;
 
-      // Only set keys if they are non-null and non-empty (do not overwrite good data with null)
-      function safeSet(key, value){
-        try{
-          if (value === null || value === undefined) return;
-          // avoid writing empty object/array that is not useful
-          if (typeof value === 'object') {
-            var str = JSON.stringify(value||{});
-            if (str === '{}' || str === '[]') return;
-            localStorage.setItem(key, str);
-            return;
-          }
-          if (String(value).trim() === '') return;
-          localStorage.setItem(key, String(value));
-        }catch(e){}
-      }
+    var appStateString = JSON.stringify({
+        identitasData: data.identitasData || {},
+        kegiatanData: data.kegiatanData || {},
+        muridData: data.muridData || {},
+        daftarMurid: data.daftarMurid || [],
+        isIdentitasComplete: (data.identitasData && data.identitasData.namaSekolah) ? true : false
+    });
 
-      if (data.identitasData) safeSet('identitasData', data.identitasData);
-      if (data.kegiatanData) safeSet('kegiatanData', data.kegiatanData);
-      if (data.muridData) safeSet('muridData', data.muridData);
-      if (Array.isArray(data.daftarMurid) && data.daftarMurid.length>0) safeSet('daftarMurid', data.daftarMurid);
-      if (obj.activeTab) safeSet('activeTab', obj.activeTab);
+    localStorage.setItem('raporKokurikulerState', appStateString);
+    if (activeTab) localStorage.setItem('activeTab', activeTab);
+    localStorage.removeItem('savedSession'); 
+    return true;
+  }catch(e){ console.warn('safeRestoreSavedSession error', e); return false; }
+};
 
-      return true;
-    }catch(e){ console.warn('safeRestoreSavedSession error', e); return false; }
-  };
 
   // Replace existing restoreSavedSession if present with safer version
   try{
